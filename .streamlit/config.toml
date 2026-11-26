@@ -1,0 +1,19 @@
+[server]
+headless = true
+maxUploadSize = 1
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "viewer"
+
+[theme]
+base = "dark"
+primaryColor = "#4E9F3D"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#16191D"
+textColor = "#FFFFFF"
+font = "sans serif"
+baseFontSize = 18
