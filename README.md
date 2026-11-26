@@ -48,8 +48,7 @@ streamlit run spec2mrm_web/app.py
   GitHub repository.
 - **Spectral libraries:** the transition table holds derived values
   (precursor ions, product-ion m/z, detection frequencies), not spectra. They
-  were computed from libraries distributed by GNPS and MoNA. The website lists
-  every source library and how many spectra it contributed.
+  were computed from public libraries distributed by GNPS, MoNA and MassBank.
 
 Because it includes 2-step, this repository is distributed under the GNU
 Affero General Public License v3.0 (`LICENSE`).

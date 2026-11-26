@@ -83,8 +83,8 @@ def main():
 
     out = pd.DataFrame()
     out["Cpd Name"] = df[c_name] if c_name else ""
-    out["Prec Ion"] = pd.to_numeric(df[c_prec], errors="coerce")
-    out["Prod Ion"] = pd.to_numeric(df[c_prod], errors="coerce")
+    out["Prec Ion"] = pd.to_numeric(df[c_prec], errors="coerce").round(1)
+    out["Prod Ion"] = pd.to_numeric(df[c_prod], errors="coerce").round(1)
     pol = df[c_pol].map(norm_polarity) if c_pol else "Positive"
     out["Polarity_tmp"] = pol
 
