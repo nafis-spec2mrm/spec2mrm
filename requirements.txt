@@ -1,0 +1,32 @@
+# Spec2MRM public app: one Python 3.12 environment for the web app, the CatBoost
+# CE model, FIORA (in-silico spectra) and 2-step (retention time).
+streamlit==1.67.0
+# pyarrow 19+ needs NumPy 2; 18.1 works with NumPy 1.26.
+pyarrow==18.1.0
+# NumPy 1.26 is required by the authors' 2-step / Chemprop 1.6.1 checkpoint.
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.14.1
+scikit-learn==1.9.1
+joblib==1.6.0
+catboost==1.2.10
+rdkit==2026.9.1
+# CPU-only PyTorch on Linux (the default Linux wheel pulls ~3 GB of CUDA libraries).
+# A direct file link, not an extra index: uv (used by Streamlit Cloud) would
+# otherwise look for every package on the PyTorch index and fail.
+torch @ https://download.pytorch.org/whl/cpu/torch-2.6.0%2Bcpu-cp312-cp312-linux_x86_64.whl ; sys_platform == "linux"
+torch==2.6.0 ; sys_platform != "linux"
+torch-geometric==2.6.1
+lightning-fabric==2.6.1
+torchmetrics==1.8.1
+# FIORA (MIT), pinned to the commit benchmarked for Spec2MRM; includes its models.
+fiora @ git+https://github.com/BAMeScience/fiora@e19ef82c9a6cb9dbac92bce23e914008f1aeb44e
+# 2-step retention time (AGPL-3.0); code and model are shipped in external/2-step.
+chemprop==1.6.1
+pulp==2.8.0
+statsmodels==0.14.4
+typed-argument-parser==1.12.0
+pyyaml==6.0.2
+tensorboard==2.21.0
+# Q&A board storage on the public site (online PostgreSQL database).
+psycopg2-binary==2.9.10

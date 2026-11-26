@@ -1,0 +1,36 @@
+{
+  "model": "external/2-step/models/2-step0525.pt",
+  "upstream_directory": "external/2-step",
+  "report_directory": "external/RepoRT",
+  "methods": {
+    "Positive": {
+      "method_id": "POS_BEH_C18_FA_20250704",
+      "column_name": "Waters ACQUITY UPLC BEH C18",
+      "particle_size_um": 1.7,
+      "column_length_mm": 100,
+      "column_id_mm": 2.1,
+      "flow_ml_min": 0.2,
+      "ph": 3.75,
+      "ph_source": "User supplied approximate aqueous mobile-phase pH, 2026-11-02",
+      "dead_time_min": null,
+      "void_factor": 2.0,
+      "run_time_min": 21.0
+    },
+    "Negative": {
+      "method_id": "NEG_BEH_C18_NH4OAC_20250704",
+      "column_name": "Waters ACQUITY UPLC BEH C18",
+      "particle_size_um": 1.7,
+      "column_length_mm": 100,
+      "column_id_mm": 2.1,
+      "flow_ml_min": 0.2,
+      "ph": 7.0,
+      "ph_source": "User supplied aqueous mobile-phase pH, 2026-11-02",
+      "dead_time_min": null,
+      "void_factor": 2.0,
+      "run_time_min": 21.0
+    }
+  },
+  "anchors": "",
+  "upstream_commit": "41a423392bad5478d3cf053edd7f17a2ca8c347c",
+  "report_commit": "1115f14202b3ff29a0fb3dd0d410a03969fe0d89"
+}
