@@ -36,8 +36,8 @@ from consensus import (PRECURSOR_MATCH_TOL, candidate_key, confidence, library_c
                        precursor_candidates)
 from predict_rt_2step import prepare, resolve
 
-EXAMPLE = b"name,smiles,polarity\nCaffeine,Cn1c(=O)c2c(ncn2C)n(C)c1=O,Positive\nAcetaminophen,CC(=O)Nc1ccc(O)cc1,Positive\nSulfamethoxazole,Cc1cc(NS(=O)(=O)c2ccc(N)cc2)no1,Positive\n"
-TARGET_TEMPLATE = b"name,smiles\n"
+EXAMPLE = b"Name,SMILES,Polarity\nCaffeine,Cn1c(=O)c2c(ncn2C)n(C)c1=O,Positive\nAcetaminophen,CC(=O)Nc1ccc(O)cc1,Positive\nSulfamethoxazole,Cc1cc(NS(=O)(=O)c2ccc(N)cc2)no1,Positive\n"
+TARGET_TEMPLATE = b"Name,SMILES,Polarity\n"
 ANCHOR_TEMPLATE = b"smiles,rt_min\n"
 MAX_ROWS = 500
 POLARITIES = ('Positive', 'Negative')
@@ -166,7 +166,7 @@ def apply_class_rules(targets, transitions, misses):
         if not result:
             other = rule_polarity(smiles[key])
             if other and not both[key]:
-                miss['reason'] = (f'No library spectrum. A {other}-mode class rule exists for this structure; '
+                miss['reason'] = (f'No library spectrum. Predicted transitions are available in {other} mode; '
                                   f'submit it as {other.capitalize()} or Both.')
             keep.append(miss)
             continue

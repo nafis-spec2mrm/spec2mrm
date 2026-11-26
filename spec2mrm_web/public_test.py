@@ -20,10 +20,11 @@ APP = str(Path(__file__).with_name('app.py'))
 app = AppTest.from_file(APP, default_timeout=120).run()
 assert not app.exception, app.exception
 assert not any('access code' in m.value.lower() for m in app.markdown), 'public site must not ask for a code'
-assert any('PUBLIC BETA' in m.value for m in app.markdown), 'PUBLIC BETA badge missing'
+assert not any('PUBLIC BETA' in m.value for m in app.markdown), 'public site must not show a beta badge'
+assert any('FIORA IN-SILICO' in c.value for c in app.caption), 'tagline must mention FIORA'
 assert all('BEH C18 demo' not in o for r in app.radio for o in r.options), 'lab demo must be hidden'
-assert any('Spectral libraries' in e.label for e in app.expander), 'library credits missing'
-print('PASS: open access, PUBLIC BETA badge, lab demo hidden, library credits shown.', flush=True)
+assert not any('Spectral libraries' in e.label for e in app.expander), 'library list must be hidden'
+print('PASS: open access, no beta badge, FIORA tagline, lab demo hidden, library list hidden.', flush=True)
 
 app.radio[0].set_value('Paste compounds').run()
 app.text_area(key='paste_text').input(

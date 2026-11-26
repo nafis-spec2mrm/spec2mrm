@@ -12,7 +12,7 @@ import streamlit as st
 
 import qa
 from engine import (ANCHOR_TEMPLATE, EXAMPLE, MAX_ROWS, POLARITIES, TARGET_TEMPLATE, demo_available,
-                    generate, library_credits, public_site, supported_columns, targets_from_csv, targets_from_text)
+                    generate, public_site, supported_columns, targets_from_csv, targets_from_text)
 import fiora_predict  # importable after engine (engine adds the toolkit root to sys.path)
 
 HERE = Path(__file__).resolve().parent
@@ -56,6 +56,8 @@ body { background: transparent !important; }
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMain"] {
     background: transparent !important; }
 [data-testid="stSidebar"] { background: #FFFFFF !important; border-right: none; }
+[data-testid="stSidebar"] [data-testid="stFullScreenFrame"]:has([data-testid="stImage"]) {
+  width: 100% !important; display: flex; justify-content: center; }
 .stApp [data-testid="stSidebar"] p, .stApp [data-testid="stSidebar"] li, .stApp [data-testid="stSidebar"] span,
 .stApp [data-testid="stSidebar"] label, .stApp [data-testid="stSidebar"] div[data-testid="stMarkdownContainer"],
 .stApp [data-testid="stSidebar"] [data-testid="stCaptionContainer"] { color: #000000 !important; }
@@ -145,7 +147,7 @@ def molecule_background():
       return (sprites[el] = c);
     }
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const FOLLOW_SHARE = 0.3, FOLLOW_RANGE = 520;
+    const FOLLOW_COUNT = 6, FOLLOW_RANGE = 450;  // the molecules nearest the cursor follow it
     let W = 0, H = 0, items = [], deck = [], cell = 200;
     const mouse = {x: -1e4, y: -1e4, vx: 0, vy: 0, active: false};
     function nextMol() {
@@ -175,8 +177,6 @@ def molecule_background():
         if (!s.x && !s.y) { s.x = s.hx; s.y = s.hy; }
         s.scale = Math.min(20, cell * 0.42 * s.size / s.mol.radius);
       });
-      const shuffled = items.slice().sort(() => Math.random() - 0.5);
-      shuffled.forEach((s, k) => { s.follower = k < Math.round(items.length * FOLLOW_SHARE); });
     }
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -239,14 +239,24 @@ def molecule_background():
         ctx.fillText(s.mol.cls, s.x, bottom + 15);
       }
     }
+    function pickFollowers() {
+      // Nearest home spots to the cursor; current followers get a small bonus so they don't flicker.
+      for (const s of items) {
+        const d = Math.hypot(mouse.x - s.hx, mouse.y - s.hy) * (s.follower ? 0.85 : 1);
+        s.rank = mouse.active && d < FOLLOW_RANGE ? d : Infinity;
+      }
+      const near = items.filter(s => s.rank < Infinity).sort((a, b) => a.rank - b.rank).slice(0, FOLLOW_COUNT);
+      for (const s of items) s.follower = near.includes(s);
+    }
     function step(t) {
+      pickFollowers();
       for (const s of items) {
         // Slow dance around the molecule's own spot.
         const amp = cell * 0.55;
         let tx = s.hx + amp * Math.sin(t * s.f1 + s.p1) + amp * 0.35 * Math.sin(t * s.f2 * 2.3 + s.p2);
         let ty = s.hy + amp * Math.cos(t * s.f2 + s.p2) + amp * 0.35 * Math.cos(t * s.f1 * 1.7 + s.p1);
         const d = Math.hypot(mouse.x - s.x, mouse.y - s.y);
-        const chasing = s.follower && mouse.active && Math.hypot(mouse.x - s.hx, mouse.y - s.hy) < FOLLOW_RANGE;
+        const chasing = s.follower;
         if (chasing) {
           s.orbit += 0.004;
           tx = mouse.x + Math.cos(s.orbit) * s.ring;
@@ -467,9 +477,36 @@ def profile_form(pol, columns):
     return (method, anchor.getvalue()) if ready else None
 
 
+CONFIDENCE_LABELS = {'High': 'Gold', 'Moderate': 'Silver', 'Verify-optimize': 'Bronze'}
+TRANSITION_COLUMNS = {
+    'name': st.column_config.TextColumn('Compound', help='Compound name as you entered it.'),
+    'polarity': st.column_config.TextColumn('Polarity', help='Ionisation mode: Positive or Negative ESI.'),
+    'role': st.column_config.TextColumn(
+        'Role', help='Quantifier: the main transition for quantification. '
+                     'Qualifier: a second transition to confirm identity (ion ratio).'),
+    'precursor_ion': st.column_config.TextColumn(
+        'Precursor Ion Adduct', help='Ion selected in Q1, e.g. [M+H]+ or [M-H]-.'),
+    'precursor_mz': st.column_config.NumberColumn(
+        'Q1 m/z', format='%.1f', help='Precursor ion m/z, calculated from the structure for the adduct shown.'),
+    'product_mz': st.column_config.NumberColumn(
+        'Q3 m/z', format='%.1f', help='Product ion m/z selected in Q3.'),
+    'collision_energy_eV': st.column_config.NumberColumn(
+        'Starting CE', help='Predicted collision energy (eV). A starting value to optimise on your instrument.'),
+    'source': st.column_config.TextColumn(
+        'Source', help='Library: from experimental MS/MS spectra. '
+                       'Predicted: in-silico prediction (no library spectra available).'),
+    'fragment_confidence': st.column_config.TextColumn(
+        'Confidence', help='Library transitions: Gold, Silver or Bronze (Gold = strongest library evidence). '
+                           'Predicted transitions: Low.'),
+    'predicted_rt_min': st.column_config.NumberColumn(
+        'Predicted RT (min)', help='Retention time predicted for your LC method from your anchor standards.'),
+    'rt_status': st.column_config.TextColumn('RT Status', help='Whether a retention time could be predicted.'),
+}
+
+
 def render_results(result):
     transitions, misses, rt = (result[key] for key in ('transitions', 'misses', 'rt'))
-    st.header('3 · Review and download')
+    st.header('3 · Review and Download')
     a, b, c, d = st.columns(4)
     a.metric('Compounds submitted', result['target_count'])
     b.metric('Transitions generated', len(transitions))
@@ -488,42 +525,23 @@ def render_results(result):
             rule = source.str.startswith('class rule')
             fiora = source.str.startswith('in-silico')
             n_lib = transitions.loc[~rule & ~fiora, ['inchikey', 'polarity']].drop_duplicates().shape[0]
-            n_rule = transitions.loc[rule, ['inchikey', 'polarity']].drop_duplicates().shape[0]
-            n_fiora = transitions.loc[fiora, ['inchikey', 'polarity']].drop_duplicates().shape[0]
-            st.markdown(f'**{n_lib}** compound/mode pairs from experimental library spectra · '
-                        f'**{n_rule}** from PFAS/QAC class rules · **{n_fiora}** predicted in silico (FIORA)')
-            if n_fiora:
-                st.warning('FIORA-predicted transitions are low-confidence starting points. In our benchmark on 187 '
-                           "compounds measured on the lab's Agilent 6470, FIORA's top predicted ion was one of the "
-                           f'monitored product ions for {fiora_predict.TOP1_HIT_ALL:.0%} of compounds '
-                           f'({fiora_predict.TOP1_HIT_UNSEEN:.0%} for compounds absent from public libraries). '
-                           'Confirm them with a standard or by product-ion scan before quantitative use.')
-            if n_rule:
-                st.caption('Rule-predicted transitions use well-established PFAS and QAC fragmentation. On the '
-                           "lab's Agilent 6470 they reproduced 55 of 58 measured quantifier ions and 43 of 46 "
-                           'qualifiers (a consistency check on the data the rules were built from, not an '
-                           'independent validation). Confirm them with a standard when one is available.')
-            st.caption('Model-predicted CE values are Agilent starting settings. Verify them on your instrument.')
-            transitions = transitions.assign(source=source.str.replace('experimental library consensus', 'Library')
-                                             .str.replace('class rule: ', 'Rule: ')
-                                             .str.replace('in-silico: FIORA', 'Predicted: FIORA'))
+            n_pred = transitions.loc[rule | fiora, ['inchikey', 'polarity']].drop_duplicates().shape[0]
+            st.markdown(f'Search: **{n_lib}** Experimental Library Spectra / **{n_pred}** Predicted In-Silico')
+            transitions = transitions.assign(
+                source=source.str.replace('experimental library consensus', 'Library')
+                .str.replace('in-silico: FIORA', 'Predicted: FIORA').mask(rule, 'Predicted'),
+                fragment_confidence=transitions.fragment_confidence.map(CONFIDENCE_LABELS)
+                .fillna(transitions.fragment_confidence).mask(rule | fiora, 'Low'),
+                precursor_mz=transitions.precursor_mz.round(1), product_mz=transitions.product_mz.round(1))
+            if PUBLIC:  # rule details are for the developers; visitors see "Predicted" in the CSV too
+                transitions = transitions.drop(columns=['rule_note'], errors='ignore')
+                for column in ('fragment_source', 'product_mz_basis'):
+                    if column in transitions:
+                        transitions[column] = transitions[column].mask(rule, 'predicted')
             cols = ['name', 'polarity', 'role', 'precursor_ion', 'precursor_mz', 'product_mz', 'collision_energy_eV',
-                    'source', 'fragment_confidence', 'library_spectra', 'predicted_rt_min', 'rt_status']
+                    'source', 'fragment_confidence', 'predicted_rt_min', 'rt_status']
             st.dataframe(transitions[[c for c in cols if c in transitions]], hide_index=True, width='stretch',
-                         column_config={'name': 'Compound', 'precursor_ion': 'Precursor ion',
-                                        'precursor_mz': st.column_config.NumberColumn(
-                                            'Q1 m/z', format='%.4f',
-                                            help='Calculated from the structure for the precursor ion shown.'),
-                                        'product_mz': st.column_config.NumberColumn(
-                                            'Q3 m/z', format='%.4f',
-                                            help='Consensus product ion. Ions closer than 0.7 Da are merged, '
-                                                 'since Q3 cannot separate them.'),
-                                        'library_spectra': st.column_config.NumberColumn(
-                                            'Library spectra', help='Independent spectra after removing '
-                                                                    'duplicates mirrored between libraries.'),
-                                        'collision_energy_eV': 'Starting CE', 'source': 'Source',
-                                        'fragment_confidence': 'Confidence',
-                                        'predicted_rt_min': 'Predicted RT (min)'})
+                         column_config=TRANSITION_COLUMNS)
             left, right = st.columns(2)
             with left:
                 download('Download unscheduled MassHunter CSV', result['masshunter'], 'spec2mrm_masshunter_unscheduled.csv')
@@ -547,7 +565,7 @@ def render_results(result):
         if misses.empty:
             st.success('Every submitted compound has at least one transition.')
         else:
-            st.caption('These compounds have no library spectrum in the requested mode, no PFAS/QAC class rule, and '
+            st.caption('These compounds have no library spectrum in the requested mode and '
                        'no usable in-silico prediction (see the reason column). Use this list for follow-up.')
             st.dataframe(misses, hide_index=True, width='stretch')
             download('Download unmatched list', misses.to_csv(index=False), 'spec2mrm_unmatched.csv')
@@ -571,17 +589,20 @@ with st.sidebar:
 3. Click **Generate MRM method**, review the transitions, and download the MassHunter CSV.
 
 Collision energies are starting values (typically within about 10 eV); optimise them on your
-instrument. PFAS and quaternary ammonium compounds without library spectra get transitions
-from class rules (labelled "Rule" in the Source column). Remaining compounds get an in-silico
-prediction from FIORA (labelled "Predicted: FIORA", low confidence). Compounds FIORA cannot
+instrument. Compounds without library spectra get predicted
+transitions (labelled "Predicted" or "Predicted: FIORA" in the Source column, lower confidence). Compounds FIORA cannot
 handle are listed as unmatched.
 
 **Questions?** {'Open the **Q&A** page, or email' if SHOW_QA else 'Email'}
 [{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL}).""")
     st.divider()
     if page == 'Method builder':
-        st.markdown('1. Load compounds\n2. Choose an LC method\n3. Review and download')
-    st.caption('This prototype searches the installed spectral library. CFM-ID is not run here. The unscheduled CSV uses the Agilent MassHunter column format.')
+        st.markdown('1. Load Compounds\n2. Add Retention Time (Optional)\n3. Review and Download')
+    st.markdown('**Spec2MRM** turns a compound name and SMILES into ready-to-use MRM transitions for '
+                'triple-quadrupole LC-MS/MS, without needing an analytical standard. Product ions come from '
+                'experimental MS/MS libraries, or from in-silico prediction when no spectra exist. Each '
+                'transition gets a predicted starting collision energy, and retention times can be '
+                'estimated for your own LC method.')
     if PUBLIC:
         st.caption(f'Up to {MAX_ROWS} rows per CSV. Your compound lists are processed for your session only and '
                    'are not stored.' + (' Q&A posts are public.' if SHOW_QA else ''))
@@ -591,22 +612,23 @@ handle are listed as unmatched.
     else:
         st.caption(f'Up to {MAX_ROWS} rows per CSV. Files and predictions stay on this machine.')
 
-st.badge('PUBLIC BETA' if PUBLIC else 'DEPARTMENT TRIAL' if department_trial else 'LOCAL PROTOTYPE', color='green')
+if not PUBLIC:
+    st.badge('DEPARTMENT TRIAL' if department_trial else 'LOCAL PROTOTYPE', color='green')
 if page == 'Q&A' and SHOW_QA:
     render_qa(developer=st.session_state.get('_admin', False) if PUBLIC else not department_trial)
     st.stop()
 
 st.markdown('<p class="s2m-tagline">Generate starting MRM transitions and optional retention-time estimates '
             'from a compound name and SMILES.</p>', unsafe_allow_html=True)
-st.caption('EXPERIMENTAL MS/MS LIBRARY  ·  CATBOOST COLLISION ENERGY  ·  2-STEP RETENTION TIME')
+st.caption('EXPERIMENTAL MS/MS LIBRARY + FIORA IN-SILICO PREDICTION  ·  CATBOOST COLLISION ENERGY  ·  2-STEP RETENTION TIME')
 
-st.header('1 · Load compounds')
+st.header('1 · Load Compounds')
 source = st.radio('Compound source', ['Built-in example', 'Paste compounds', 'Upload compound CSV'], horizontal=True)
 parsed = None  # targets already parsed from pasted text
 if source == 'Built-in example':
     raw = EXAMPLE
     with st.expander('Preview example compounds', expanded=True):
-        st.dataframe(targets_from_csv(EXAMPLE)[['name', 'smiles', 'polarity']], hide_index=True, width='stretch')
+        st.dataframe(targets_from_csv(EXAMPLE)[['name', 'smiles', 'polarity']].rename(columns={'name': 'Name', 'smiles': 'SMILES', 'polarity': 'Polarity'}), hide_index=True, width='stretch')
 elif source == 'Paste compounds':
     raw = None
     text = st.text_area('One compound per line', key='paste_text', height=160, max_chars=200_000,
@@ -625,15 +647,15 @@ elif source == 'Paste compounds':
                 name=('name', 'first'), smiles=('smiles', 'first'),
                 ion_mode=('polarity', lambda p: ' + '.join(p)))
             st.dataframe(preview, hide_index=True, width='stretch',
-                         column_config={'name': 'Compound', 'smiles': 'SMILES', 'ion_mode': 'Ion mode searched'})
+                         column_config={'name': 'Compound', 'smiles': 'SMILES', 'ion_mode': 'Ion Mode Searched'})
 else:
     upload = st.file_uploader('Compound list', type=['csv'], max_upload_size=1)
     raw = upload.getvalue() if upload is not None else None
-    st.caption('Required columns: name, smiles. Optional: polarity (Positive, Negative or Both). '
+    st.caption('Required columns: Name, SMILES. Optional: Polarity (Positive, Negative or Both). '
                'A blank or missing polarity searches both modes.')
 download('Download compound template', TARGET_TEMPLATE, 'spec2mrm_compounds_template.csv')
 
-st.header('2 · Add retention time (optional)')
+st.header('2 · Add Retention Time (Optional)')
 modes = {'No RT · unscheduled MRM': 'none', 'Use my LC method and anchors': 'custom'}
 if source == 'Built-in example' and not department_trial and demo_available():
     modes['Try the local BEH C18 demo'] = 'demo'
@@ -692,16 +714,9 @@ if 'spec2mrm_result' in st.session_state:
 st.markdown(f"""<div class="s2m-credit">
 
 **Credits.** {RT_CREDIT}
-Product ions come from public experimental spectral libraries (GNPS, MoNA and MassBank; see below).
+Product ions come from public experimental spectral libraries (GNPS, MoNA and MassBank).
 Starting collision energies come from Spec2MRM's CatBoost model, trained on measured Agilent 6470 settings.
 In-silico transitions: {fiora_predict.CITATION}
-Background structures: PubChem 3D conformers. Contact: [{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL}).
+Contact: [{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL}).
 
 </div>""", unsafe_allow_html=True)
-credits = library_credits()
-if credits:
-    with st.expander('Spectral libraries behind the transition table'):
-        st.caption('Transitions are derived values (precursor ions, product-ion m/z and how often each ion was seen), '
-                   'computed from these libraries as distributed by GNPS and MoNA. No spectra are redistributed. '
-                   'Spectra per library:')
-        st.markdown('  \n'.join(f'{escape_md(name)}: {count:,}' for name, count in credits))
