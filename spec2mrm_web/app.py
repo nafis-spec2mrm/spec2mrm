@@ -33,7 +33,7 @@ RT_CREDIT = (
     'Column database: [RepoRT](https://github.com/michaelwitting/RepoRT) (CC BY-SA 4.0). '
     'Spec2MRM uses their published model unchanged.')
 
-st.set_page_config(page_title='Spec2MRM | Spectra to MRM workflow', page_icon='⚗️', layout='wide')
+st.set_page_config(page_title='Spec2MRM | Spectra to MRM workflow', page_icon=str(HERE / 'assets' / 'spec2mrm_icon.png'), layout='wide')
 
 
 def secret(name):
@@ -507,7 +507,7 @@ TRANSITION_COLUMNS = {
     'product_mz': st.column_config.NumberColumn(
         'Q3 m/z', format='%.1f', help='Product ion m/z selected in Q3.'),
     'collision_energy_eV': st.column_config.NumberColumn(
-        'Starting CE', help='Predicted collision energy (eV). A starting value to optimise on your instrument.'),
+        'Starting CE', format='%d', help='Predicted collision energy (eV). A starting value to optimise on your instrument.'),
     'source': st.column_config.TextColumn(
         'Source', help='Library: from experimental MS/MS spectra. '
                        'Predicted: in-silico prediction (no library spectra available).'),
@@ -548,7 +548,9 @@ def render_results(result):
                 .str.replace('in-silico: FIORA', 'Predicted: FIORA').mask(rule, 'Predicted'),
                 fragment_confidence=transitions.fragment_confidence.map(CONFIDENCE_LABELS)
                 .fillna(transitions.fragment_confidence).mask(rule | fiora, 'Low'),
-                precursor_mz=transitions.precursor_mz.round(1), product_mz=transitions.product_mz.round(1))
+                precursor_mz=transitions.precursor_mz.round(1), product_mz=transitions.product_mz.round(1),
+                collision_energy_eV=pd.to_numeric(transitions.collision_energy_eV, errors='coerce')
+                .round().astype('Int64'))  # whole volts, same rounding as the MassHunter CSV
             if PUBLIC:  # rule details are for the developers; visitors see "Predicted" in the CSV too
                 transitions = transitions.drop(columns=['rule_note'], errors='ignore')
                 for column in ('fragment_source', 'product_mz_basis'):
