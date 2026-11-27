@@ -90,4 +90,6 @@ assert not app.exception and not app.error, [e.value for e in app.error]
 result = app.session_state['spec2mrm_result']
 assert not result['rt_error'], result['rt_error']
 assert result['rt'].predicted_rt_min.notna().sum() == 3, result['rt']
-print('PASS: 2-step RT runs with a user LC profile.', flush=True)
+labels = [b.label for b in app.get('download_button')]
+assert 'Download dMRM MassHunter CSV' in labels and 'Download results CSV' in labels, labels
+print('PASS: 2-step RT runs with a user LC profile; dMRM download offered.', flush=True)

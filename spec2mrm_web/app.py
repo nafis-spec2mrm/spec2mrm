@@ -1,6 +1,7 @@
 """Spec2MRM local Streamlit prototype."""
 import hashlib
 import hmac
+import io
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import re
 import subprocess
 import time
 
+import pandas as pd
 import streamlit as st
 
 import qa
@@ -436,6 +438,23 @@ def download(label, data, name):
     st.download_button(label, data, file_name=name, mime='text/csv', on_click='ignore')
 
 
+def dmrm_csv(result, transitions, window):
+    """MassHunter dynamic MRM table: the unscheduled table plus Ret Time and Delta Ret Time.
+
+    Transitions without a predicted RT get a window covering the whole run, so
+    they are still acquired."""
+    table = pd.read_csv(io.BytesIO(result['masshunter']))
+    if len(table) != len(transitions):
+        raise ValueError('The MassHunter table and the results do not line up.')
+    run = max(job['method']['run_time_min'] for job in result['manifest']['jobs'])
+    rt = pd.to_numeric(transitions['predicted_rt_min'], errors='coerce').reset_index(drop=True)
+    missing = rt.isna()
+    table['Ret Time (min)'] = rt.round(2).where(~missing, round(run / 2, 2))
+    table['Delta Ret Time'] = float(window)
+    table.loc[missing, 'Delta Ret Time'] = float(run)
+    return table.to_csv(index=False), int(missing.sum())
+
+
 def profile_form(pol, columns):
     with st.expander(f'{pol} LC method', expanded=True):
         left, right = st.columns(2)
@@ -542,11 +561,30 @@ def render_results(result):
                     'source', 'fragment_confidence', 'predicted_rt_min', 'rt_status']
             st.dataframe(transitions[[c for c in cols if c in transitions]], hide_index=True, width='stretch',
                          column_config=TRANSITION_COLUMNS)
-            left, right = st.columns(2)
+            shown = transitions[[c for c in cols if c in transitions]]
+            labels = {k: v if isinstance(v, str) else v['label'] for k, v in TRANSITION_COLUMNS.items()}
+            results_csv = shown.rename(columns=labels).to_csv(index=False)
+            has_rt = 'predicted_rt_min' in transitions and result.get('manifest')
+            if has_rt:
+                window = st.number_input(
+                    'dMRM window (Delta Ret Time, min)', min_value=0.2, max_value=10.0, value=4.0, step=0.1,
+                    key='dmrm_window',
+                    help='Total width of the acquisition window around each predicted RT. In a cross-validation '
+                         'on 109 measured standards (21-min C18 runs), 89% of predicted RTs fell within a '
+                         '4-min window (74% within 2 min). Start wide, then narrow the window once you have '
+                         'confirmed the RTs.')
+            left, middle, right = st.columns(3) if has_rt else (*st.columns(2), None)
             with left:
                 download('Download unscheduled MassHunter CSV', result['masshunter'], 'spec2mrm_masshunter_unscheduled.csv')
-            with right:
-                download('Download full results CSV', transitions.to_csv(index=False), 'spec2mrm_transitions.csv')
+            if has_rt:
+                dmrm, n_full = dmrm_csv(result, transitions, window)
+                with middle:
+                    download('Download dMRM MassHunter CSV', dmrm, 'spec2mrm_masshunter_dMRM.csv')
+                if n_full:
+                    st.caption(f'{n_full} transitions have no predicted RT; in the dMRM file they get a window '
+                               'covering the whole run.')
+            with (right if has_rt else middle):
+                download('Download results CSV', results_csv, 'spec2mrm_results.csv')
     with tabs[1]:
         if rt.empty:
             st.info('Select an LC profile with measured anchors to add retention times in minutes.')
