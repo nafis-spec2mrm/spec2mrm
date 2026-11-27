@@ -441,17 +441,14 @@ def download(label, data, name):
 def dmrm_csv(result, transitions, window):
     """MassHunter dynamic MRM table: the unscheduled table plus Ret Time and Delta Ret Time.
 
-    Transitions without a predicted RT get a window covering the whole run, so
-    they are still acquired."""
+    Transitions without a predicted RT are left blank, for the user to fill in."""
     table = pd.read_csv(io.BytesIO(result['masshunter']))
     if len(table) != len(transitions):
         raise ValueError('The MassHunter table and the results do not line up.')
-    run = max(job['method']['run_time_min'] for job in result['manifest']['jobs'])
     rt = pd.to_numeric(transitions['predicted_rt_min'], errors='coerce').reset_index(drop=True)
     missing = rt.isna()
-    table['Ret Time (min)'] = rt.round(2).where(~missing, round(run / 2, 2))
-    table['Delta Ret Time'] = float(window)
-    table.loc[missing, 'Delta Ret Time'] = float(run)
+    table['Ret Time (min)'] = rt.round(2)
+    table['Delta Ret Time'] = pd.Series(float(window), index=table.index).where(~missing)
     return table.to_csv(index=False), int(missing.sum())
 
 
@@ -581,8 +578,8 @@ def render_results(result):
                 with middle:
                     download('Download dMRM MassHunter CSV', dmrm, 'spec2mrm_masshunter_dMRM.csv')
                 if n_full:
-                    st.caption(f'{n_full} transitions have no predicted RT; in the dMRM file they get a window '
-                               'covering the whole run.')
+                    st.caption(f'{n_full} transitions have no predicted RT; their Ret Time and Delta Ret Time are '
+                               'left blank in the dMRM file. Fill them in, or remove those rows, before importing.')
             with (right if has_rt else middle):
                 download('Download results CSV', results_csv, 'spec2mrm_results.csv')
     with tabs[1]:
